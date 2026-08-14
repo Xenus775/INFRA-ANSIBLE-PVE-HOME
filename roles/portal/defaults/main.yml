@@ -9,3 +9,4 @@ portal_node_packages:
   - nodejs
   - npm
   - git
+  - acl
