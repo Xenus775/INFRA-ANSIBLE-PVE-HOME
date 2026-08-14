@@ -1,0 +1,28 @@
+---
+wordpress_packages:
+  - apache2
+  - mariadb-server
+  - php
+  - libapache2-mod-php
+  - php-mysql
+  - php-curl
+  - php-gd
+  - php-xml
+  - php-mbstring
+  - php-zip
+  - python3-pymysql
+  - unzip
+
+wordpress_db_name: wordpress
+wordpress_db_user: wordpress
+wordpress_db_password_length: 24
+
+wordpress_admin_user: admin
+wordpress_admin_email: "admin@{{ inventory_hostname }}.local"
+wordpress_admin_password_length: 24
+
+wordpress_install_dir: /var/www/html
+wpcli_url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+wpcli_path: /usr/local/bin/wp
+
+mysql_socket: /run/mysqld/mysqld.sock

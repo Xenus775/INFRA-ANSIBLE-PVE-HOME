@@ -1,0 +1,64 @@
+---
+- name: Installer MariaDB
+  ansible.builtin.apt:
+    name: "{{ mysql_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Activer et demarrer MariaDB
+  ansible.builtin.systemd:
+    name: mariadb
+    enabled: true
+    state: started
+
+- name: Verifier si MariaDB a deja ete provisionne
+  ansible.builtin.stat:
+    path: /root/.ansible_provisioned_mysql
+  register: mysql_marker
+
+- name: Generer un mot de passe aleatoire pour root
+  ansible.builtin.set_fact:
+    mysql_root_password: "{{ lookup('password', '/dev/null length=' ~ mysql_root_password_length ~ ' chars=ascii_letters,digits') }}"
+  when: not mysql_marker.stat.exists
+
+- name: Supprimer les utilisateurs anonymes
+  community.mysql.mysql_user:
+    name: ""
+    host_all: true
+    state: absent
+    login_unix_socket: "{{ mysql_socket }}"
+  when: not mysql_marker.stat.exists
+
+- name: Supprimer la base de test
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+    login_unix_socket: "{{ mysql_socket }}"
+  when: not mysql_marker.stat.exists
+
+- name: Definir le mot de passe root et basculer sur l'authentification par mot de passe
+  community.mysql.mysql_user:
+    name: root
+    host: localhost
+    password: "{{ mysql_root_password }}"
+    plugin: mysql_native_password
+    login_unix_socket: "{{ mysql_socket }}"
+  when: not mysql_marker.stat.exists
+
+- name: Marquer MariaDB comme provisionne
+  ansible.builtin.file:
+    path: /root/.ansible_provisioned_mysql
+    state: touch
+    mode: "0600"
+  when: not mysql_marker.stat.exists
+
+- name: Afficher le mot de passe root genere
+  ansible.builtin.debug:
+    msg: "MYSQL_ROOT_PASSWORD host={{ inventory_hostname }} user=root password={{ mysql_root_password }}"
+  when: not mysql_marker.stat.exists
+
+- name: Signaler que MariaDB etait deja provisionne
+  ansible.builtin.debug:
+    msg: "MariaDB deja provisionne sur {{ inventory_hostname }} : mot de passe non regenere."
+  when: mysql_marker.stat.exists

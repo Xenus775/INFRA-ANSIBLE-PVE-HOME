@@ -1,0 +1,48 @@
+---
+- name: Installer PostgreSQL
+  ansible.builtin.apt:
+    name: "{{ postgresql_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Activer et demarrer PostgreSQL
+  ansible.builtin.systemd:
+    name: postgresql
+    enabled: true
+    state: started
+
+- name: Verifier si PostgreSQL a deja ete provisionne
+  ansible.builtin.stat:
+    path: /root/.ansible_provisioned_postgresql
+  register: postgresql_marker
+
+- name: Generer un mot de passe aleatoire pour le role postgres
+  ansible.builtin.set_fact:
+    postgresql_password: "{{ lookup('password', '/dev/null length=' ~ postgresql_password_length ~ ' chars=ascii_letters,digits') }}"
+  when: not postgresql_marker.stat.exists
+
+- name: Definir le mot de passe du role postgres
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: postgres
+    password: "{{ postgresql_password }}"
+  when: not postgresql_marker.stat.exists
+
+- name: Marquer PostgreSQL comme provisionne
+  ansible.builtin.file:
+    path: /root/.ansible_provisioned_postgresql
+    state: touch
+    mode: "0600"
+  when: not postgresql_marker.stat.exists
+
+- name: Afficher le mot de passe genere
+  ansible.builtin.debug:
+    msg: "POSTGRES_PASSWORD host={{ inventory_hostname }} user=postgres password={{ postgresql_password }}"
+  when: not postgresql_marker.stat.exists
+
+- name: Signaler que PostgreSQL etait deja provisionne
+  ansible.builtin.debug:
+    msg: "PostgreSQL deja provisionne sur {{ inventory_hostname }} : mot de passe non regenere."
+  when: postgresql_marker.stat.exists

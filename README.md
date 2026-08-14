@@ -74,11 +74,29 @@ Variables communes dans `inventories/home/group_vars/all.yml` (ex:
 | `common` | Mises a jour de securite, paquets de base, agent QEMU actif, fuseau horaire, synchronisation horaire |
 | `ssh` | Durcissement SSH : pas de connexion root, pas d'authentification par mot de passe |
 | `apache` | Installation et activation du serveur web Apache (`apache2`) |
+| `postgresql` | Installation de PostgreSQL, mot de passe du role `postgres` genere aleatoirement |
+| `mysql` | Installation de MariaDB, securisation de base (suppression comptes anonymes/base test), mot de passe root genere aleatoirement |
+| `wordpress` | Stack LAMP + WordPress installe et configure via WP-CLI (base + compte admin generes) |
 | `exploitation_account` | Cree un compte local `exploitation` (groupe `sudo`, mot de passe genere aleatoirement) sur une VM |
 
-Le role `apache` n'est pas applique par `site.yml` : il cible le groupe
-`webservers` de l'inventaire via le playbook dedie `webserver.yml`
-(actuellement : `web01`).
+Les roles `apache`, `postgresql`, `mysql` et `wordpress` ne sont pas
+appliques par `site.yml` : chacun cible son propre groupe d'inventaire via
+un playbook dedie, sur le meme modele :
+
+| Playbook | Groupe cible | Role |
+|---|---|---|
+| `webserver.yml` | `webservers` (actuellement : `web01`) | `apache` |
+| `postgres.yml` | `postgres_servers` | `postgresql` |
+| `mysql.yml` | `mysql_servers` | `mysql` |
+| `wordpress.yml` | `wordpress_servers` | `wordpress` |
+
+Les roles `postgresql`, `mysql` et `wordpress` suivent la meme logique
+d'idempotence que `exploitation_account` : un fichier sentinelle
+(`/root/.ansible_provisioned_<service>`) evite de regenerer les mots de
+passe lors d'un re-run. Les identifiants generes sont affiches une seule
+fois via des lignes marqueurs machine-lisibles (`POSTGRES_PASSWORD`,
+`MYSQL_ROOT_PASSWORD`, `WORDPRESS_DB`, `WORDPRESS_ADMIN` — meme convention
+que `EXPLOITATION_PASSWORD`), jamais stockes ailleurs.
 
 Le role `exploitation_account` n'est pas non plus applique par `site.yml` :
 il est declenche via le playbook `exploitation-account.yml`, cible avec

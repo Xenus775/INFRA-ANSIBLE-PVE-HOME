@@ -1,0 +1,119 @@
+---
+- name: Installer Apache, PHP et MariaDB
+  ansible.builtin.apt:
+    name: "{{ wordpress_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Activer et demarrer Apache
+  ansible.builtin.systemd:
+    name: apache2
+    enabled: true
+    state: started
+
+- name: Activer et demarrer MariaDB
+  ansible.builtin.systemd:
+    name: mariadb
+    enabled: true
+    state: started
+
+- name: Installer WP-CLI
+  ansible.builtin.get_url:
+    url: "{{ wpcli_url }}"
+    dest: "{{ wpcli_path }}"
+    mode: "0755"
+
+- name: Verifier si WordPress a deja ete provisionne
+  ansible.builtin.stat:
+    path: /root/.ansible_provisioned_wordpress
+  register: wordpress_marker
+
+- name: Generer les mots de passe (base de donnees + admin WordPress)
+  ansible.builtin.set_fact:
+    wordpress_db_password: "{{ lookup('password', '/dev/null length=' ~ wordpress_db_password_length ~ ' chars=ascii_letters,digits') }}"
+    wordpress_admin_password: "{{ lookup('password', '/dev/null length=' ~ wordpress_admin_password_length ~ ' chars=ascii_letters,digits') }}"
+  when: not wordpress_marker.stat.exists
+
+- name: Creer la base de donnees WordPress
+  community.mysql.mysql_db:
+    name: "{{ wordpress_db_name }}"
+    state: present
+    login_unix_socket: "{{ mysql_socket }}"
+  when: not wordpress_marker.stat.exists
+
+- name: Creer l'utilisateur de la base WordPress
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    host: localhost
+    login_unix_socket: "{{ mysql_socket }}"
+  when: not wordpress_marker.stat.exists
+
+- name: Retirer la page d'accueil par defaut d'Apache
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}/index.html"
+    state: absent
+  when: not wordpress_marker.stat.exists
+
+- name: Telecharger le noyau WordPress
+  ansible.builtin.command: "{{ wpcli_path }} core download --path={{ wordpress_install_dir }} --allow-root"
+  args:
+    creates: "{{ wordpress_install_dir }}/wp-settings.php"
+  when: not wordpress_marker.stat.exists
+
+- name: Generer wp-config.php
+  ansible.builtin.command: >
+    {{ wpcli_path }} config create
+    --path={{ wordpress_install_dir }}
+    --dbname={{ wordpress_db_name }}
+    --dbuser={{ wordpress_db_user }}
+    --dbpass={{ wordpress_db_password }}
+    --allow-root
+  args:
+    creates: "{{ wordpress_install_dir }}/wp-config.php"
+  when: not wordpress_marker.stat.exists
+
+- name: Installer WordPress (site + compte admin)
+  ansible.builtin.command: >
+    {{ wpcli_path }} core install
+    --path={{ wordpress_install_dir }}
+    --url=http://{{ ansible_host | default(inventory_hostname) }}/
+    --title={{ inventory_hostname }}
+    --admin_user={{ wordpress_admin_user }}
+    --admin_password={{ wordpress_admin_password }}
+    --admin_email={{ wordpress_admin_email }}
+    --skip-email
+    --allow-root
+  when: not wordpress_marker.stat.exists
+
+- name: Donner la propriete des fichiers WordPress a www-data
+  ansible.builtin.file:
+    path: "{{ wordpress_install_dir }}"
+    owner: www-data
+    group: www-data
+    recurse: true
+  when: not wordpress_marker.stat.exists
+
+- name: Marquer WordPress comme provisionne
+  ansible.builtin.file:
+    path: /root/.ansible_provisioned_wordpress
+    state: touch
+    mode: "0600"
+  when: not wordpress_marker.stat.exists
+
+- name: Afficher les identifiants de la base de donnees
+  ansible.builtin.debug:
+    msg: "WORDPRESS_DB host={{ inventory_hostname }} db_name={{ wordpress_db_name }} db_user={{ wordpress_db_user }} db_password={{ wordpress_db_password }}"
+  when: not wordpress_marker.stat.exists
+
+- name: Afficher les identifiants admin WordPress
+  ansible.builtin.debug:
+    msg: "WORDPRESS_ADMIN host={{ inventory_hostname }} user={{ wordpress_admin_user }} password={{ wordpress_admin_password }} url=http://{{ ansible_host | default(inventory_hostname) }}/"
+  when: not wordpress_marker.stat.exists
+
+- name: Signaler que WordPress etait deja provisionne
+  ansible.builtin.debug:
+    msg: "WordPress deja provisionne sur {{ inventory_hostname }} : identifiants non regeneres."
+  when: wordpress_marker.stat.exists

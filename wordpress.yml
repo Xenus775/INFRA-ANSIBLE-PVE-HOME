@@ -1,0 +1,5 @@
+---
+- name: Installer et configurer WordPress
+  hosts: wordpress_servers
+  roles:
+    - wordpress

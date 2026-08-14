@@ -1,0 +1,5 @@
+---
+- name: Installer et configurer MariaDB
+  hosts: mysql_servers
+  roles:
+    - mysql
