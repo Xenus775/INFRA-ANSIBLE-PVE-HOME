@@ -76,7 +76,10 @@ Variables communes dans `inventories/home/group_vars/all.yml` (ex:
 | `apache` | Installation et activation du serveur web Apache (`apache2`) |
 
 Le role `apache` n'est pas applique par `site.yml` : il cible le groupe
-`webservers` de l'inventaire via le playbook dedie `webserver.yml`.
+`webservers` de l'inventaire via le playbook dedie `webserver.yml`. Ce
+groupe est vide pour l'instant (aucune VM web provisionnee) ; ajoutez-y une
+VM et lancez `ansible-playbook webserver.yml` le jour ou une VM web sera
+creee via Terraform.
 
 ## Connexion SSH
 
