@@ -1,0 +1,97 @@
+---
+- name: Installer Node.js, npm et git
+  ansible.builtin.apt:
+    name: "{{ portal_node_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Creer le groupe systeme portal
+  ansible.builtin.group:
+    name: "{{ portal_service_group }}"
+    system: true
+
+- name: Creer l'utilisateur systeme portal (moindre privilege : detient le token Proxmox)
+  ansible.builtin.user:
+    name: "{{ portal_service_user }}"
+    group: "{{ portal_service_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: true
+
+- name: Creer le dossier .ssh de l'utilisateur portal
+  ansible.builtin.file:
+    path: "/home/{{ portal_service_user }}/.ssh"
+    state: directory
+    owner: "{{ portal_service_user }}"
+    group: "{{ portal_service_group }}"
+    mode: "0700"
+
+- name: Verifier si la cle de deploiement GitHub est deja en place
+  ansible.builtin.stat:
+    path: "{{ portal_deploy_key_path }}"
+  register: portal_deploy_key
+
+- name: Creer le dossier d'installation
+  ansible.builtin.file:
+    path: "{{ portal_install_dir }}"
+    state: directory
+    owner: "{{ portal_service_user }}"
+    group: "{{ portal_service_group }}"
+    mode: "0755"
+
+- name: Cloner ou mettre a jour le code du portail
+  become_user: "{{ portal_service_user }}"
+  ansible.builtin.git:
+    repo: "{{ portal_repo_url }}"
+    dest: "{{ portal_install_dir }}"
+    version: main
+    key_file: "{{ portal_deploy_key_path }}"
+    accept_hostkey: true
+  when: portal_deploy_key.stat.exists
+  register: portal_git
+
+- name: Verifier si le code du portail est present
+  ansible.builtin.stat:
+    path: "{{ portal_install_dir }}/package.json"
+  register: portal_package_json
+
+- name: Installer les dependances npm
+  become_user: "{{ portal_service_user }}"
+  ansible.builtin.command: npm install --omit=dev
+  args:
+    chdir: "{{ portal_install_dir }}"
+  when: portal_package_json.stat.exists and (portal_git.changed | default(false))
+
+- name: Copier .env.example vers .env (sans ecraser un .env deja rempli)
+  ansible.builtin.copy:
+    src: "{{ portal_install_dir }}/.env.example"
+    dest: "{{ portal_install_dir }}/.env"
+    remote_src: true
+    owner: "{{ portal_service_user }}"
+    group: "{{ portal_service_group }}"
+    mode: "0600"
+    force: false
+  when: portal_package_json.stat.exists
+
+- name: Deployer le service systemd infra-portal
+  ansible.builtin.template:
+    src: infra-portal.service.j2
+    dest: /etc/systemd/system/infra-portal.service
+    mode: "0644"
+  notify:
+    - Recharger systemd
+    - Redemarrer infra-portal
+
+- name: Activer le service infra-portal
+  ansible.builtin.systemd:
+    name: infra-portal
+    enabled: true
+  when: portal_package_json.stat.exists
+
+- name: Avertir si la cle de deploiement n'est pas encore en place
+  ansible.builtin.debug:
+    msg: >-
+      Cle de deploiement absente ({{ portal_deploy_key_path }}) : le code du
+      portail n'a pas ete clone. Deposez la cle puis relancez ce role.
+  when: not portal_deploy_key.stat.exists

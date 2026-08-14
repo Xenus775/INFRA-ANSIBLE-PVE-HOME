@@ -1,0 +1,5 @@
+---
+- name: Deployer le portail de provisioning on-demand
+  hosts: portal
+  roles:
+    - portal

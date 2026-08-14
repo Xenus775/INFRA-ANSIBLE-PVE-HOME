@@ -1,0 +1,11 @@
+---
+portal_repo_url: git@github.com:Xenus775/CODE-PLATFORME-PROVISIONING-ONDEMDAND.git
+portal_install_dir: /opt/infra-portal
+portal_service_user: portal
+portal_service_group: portal
+portal_deploy_key_path: "/home/{{ portal_service_user }}/.ssh/id_ed25519_provisioning"
+
+portal_node_packages:
+  - nodejs
+  - npm
+  - git

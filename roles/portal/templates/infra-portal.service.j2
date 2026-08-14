@@ -1,0 +1,14 @@
+[Unit]
+Description=Portail de provisioning on-demand
+After=network.target
+
+[Service]
+Type=simple
+User={{ portal_service_user }}
+WorkingDirectory={{ portal_install_dir }}
+ExecStart=/usr/bin/node {{ portal_install_dir }}/src/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
