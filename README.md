@@ -13,11 +13,13 @@ reseau, Cloud-Init) est geree par le depot Terraform.
 - [Ansible](https://docs.ansible.com/) (paquet `ansible`, pas seulement
   `ansible-core` : les roles utilisent la collection `community.general`)
 - Un acces SSH par cle au compte `ansible` sur chaque VM cible
+- `python3-ruamel.yaml` sur le control-node, pour `scripts/add-host.py`
+  (edite l'inventaire en preservant les commentaires existants)
 
 Installation sur une machine Debian/Ubuntu :
 
 ```bash
-sudo apt update && sudo apt install -y git ansible
+sudo apt update && sudo apt install -y git ansible python3-ruamel.yaml
 ```
 
 ## Architecture
@@ -176,10 +178,19 @@ ansible-playbook site.yml --check --diff
 
 1. Provisionnez-la avec Terraform (voir INFRA-TERRAFORM-PVE-HOME).
 2. Ajoutez-la dans `inventories/home/hosts.yml`, dans le groupe approprie
-   (creez un nouveau groupe si besoin, par exemple pour un futur groupe de
-   VM de service).
+   (creez un nouveau groupe si besoin) — soit a la main, soit avec
+   `scripts/add-host.py --group <groupe> --name <vm> --ip <ip>` (cree le
+   groupe si besoin, refuse si le nom existe deja ailleurs, preserve les
+   commentaires existants du fichier).
 3. `ansible-playbook site.yml --limit <nom-de-la-vm>` pour l'appliquer sans
-   toucher aux autres hotes.
+   toucher aux autres hotes, puis le(s) playbook(s) de service concerne(s).
+
+Ce script est concu pour etre appele a distance (SSH) par le portail de
+provisioning on-demand (voir `CODE-PLATFORME-PROVISIONING-ONDEMDAND`), qui
+reste le seul a devoir connaitre ce depot en detail — le portail n'a pas
+besoin de son propre acces GitHub a `INFRA-ANSIBLE-PVE-HOME` : il envoie
+juste une commande SSH a LPRANSIBLE01, qui reste proprietaire du checkout
+et de ses commits/push.
 
 ## Ajouter un role
 
