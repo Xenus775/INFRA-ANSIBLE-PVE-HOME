@@ -11,7 +11,7 @@
     name: "{{ portal_service_group }}"
     system: true
 
-- name: Creer l'utilisateur systeme portal (moindre privilege : detient le token Proxmox)
+- name: Creer l'utilisateur systeme portal (moindre privilege - detient le token Proxmox)
   ansible.builtin.user:
     name: "{{ portal_service_user }}"
     group: "{{ portal_service_group }}"
