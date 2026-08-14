@@ -1,0 +1,5 @@
+---
+- name: Redemarrer sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted

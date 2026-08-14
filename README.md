@@ -77,10 +77,8 @@ Variables communes dans `inventories/home/group_vars/all.yml` (ex:
 | `exploitation_account` | Cree un compte local `exploitation` (groupe `sudo`, mot de passe genere aleatoirement) sur une VM |
 
 Le role `apache` n'est pas applique par `site.yml` : il cible le groupe
-`webservers` de l'inventaire via le playbook dedie `webserver.yml`. Ce
-groupe est vide pour l'instant (aucune VM web provisionnee) ; ajoutez-y une
-VM et lancez `ansible-playbook webserver.yml` le jour ou une VM web sera
-creee via Terraform.
+`webservers` de l'inventaire via le playbook dedie `webserver.yml`
+(actuellement : `web01`).
 
 Le role `exploitation_account` n'est pas non plus applique par `site.yml` :
 il est declenche via le playbook `exploitation-account.yml`, cible avec
@@ -89,12 +87,22 @@ il est declenche via le playbook `exploitation-account.yml`, cible avec
 mise a jour de l'inventaire, push, puis execution de ce playbook depuis
 LPRANSIBLE01).
 
-Ce compte est concu comme un compte de secours (break-glass) : le mot de
-passe genere n'est utilisable que localement (console Proxmox) ou via `su`,
-jamais en SSH — le role `ssh` desactive `PasswordAuthentication`
-globalement, sans exception pour ce compte. Le mot de passe n'est genere
-qu'une seule fois : si le compte existe deja, le role ne le regenere pas
-(evite une rotation accidentelle lors d'un re-run).
+Ce compte est concu comme un compte de secours (break-glass), avec un
+acces SSH qui depend du type de VM :
+- **VM d'administration** (groupe `control_node`, ex: LPRANSIBLE01) : le
+  mot de passe n'est utilisable que localement (console Proxmox) ou via
+  `su` — le role `ssh` desactive `PasswordAuthentication` globalement,
+  sans exception pour ce compte.
+- **Toute autre VM** (ex: `web01`) : le role ajoute un bloc `Match User
+  exploitation` dans `sshd_config` qui autorise la connexion SSH par mot
+  de passe pour ce compte precis (`PubkeyAuthentication no` pour ce
+  compte, puisqu'aucune cle ne lui est jamais associee). Le compte
+  `ansible` utilise par Ansible garde son acces par cle intact : le bloc
+  `Match` ne s'applique qu'a l'utilisateur `exploitation`.
+
+Le mot de passe n'est genere qu'une seule fois : si le compte existe deja,
+le role ne le regenere pas (evite une rotation accidentelle lors d'un
+re-run).
 
 ## Connexion SSH
 
