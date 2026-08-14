@@ -1,0 +1,7 @@
+---
+common_timezone: "Europe/Paris"
+
+common_packages:
+  - qemu-guest-agent
+  - curl
+  - ca-certificates

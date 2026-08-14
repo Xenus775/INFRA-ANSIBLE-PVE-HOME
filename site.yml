@@ -1,0 +1,6 @@
+---
+- name: Configuration commune de toutes les VM gerees par l'IaC
+  hosts: all
+  roles:
+    - common
+    - ssh

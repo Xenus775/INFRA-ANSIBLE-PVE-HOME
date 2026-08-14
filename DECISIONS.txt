@@ -1,0 +1,227 @@
+==================================================
+DECISION : VM Ansible dediee (control-node) plutot qu'execution locale
+==================================================
+
+CONTEXTE
+--------
+
+Ansible ne tourne pas nativement sous Windows (il lui faut WSL, Cygwin, ou une
+machine Linux). Le poste de travail utilise pour ce projet est un Windows 11
+sans WSL installe. Il fallait decider comment executer Ansible.
+
+OPTIONS
+-------
+
+Option A : Installer WSL2 sur le poste Windows et y faire tourner Ansible.
+Option B : Creer une VM Linux dediee (control-node) qui heberge Ansible,
+  l'inventaire, et les cles SSH necessaires pour joindre les autres VM.
+
+DECISION
+--------
+
+Option B : une VM dediee `LPRANSIBLE01` (creee par le depot
+INFRA-TERRAFORM-PVE-HOME, VMID 200, IP statique 192.168.10.120) heberge
+Ansible.
+
+RAISON
+------
+
+Coherent avec l'architecture cible proposee (control-node dedie, point
+central d'administration). Independant du poste de travail utilise au
+quotidien : la VM peut etre reutilisee depuis n'importe quelle machine
+(portable, autre poste) par simple SSH, sans reinstaller d'outils locaux.
+
+IMPACT
+------
+
+Positif : environnement d'execution stable et reproductible (Debian 13, memes
+versions d'Ansible dans le temps) ; les cles SSH utilisees par Ansible pour
+joindre les autres VM restent sur la VM elle-meme plutot que dispersees sur
+plusieurs postes de travail.
+Negatif : une VM supplementaire a maintenir (mises a jour de securite,
+espace disque) ; necessite un acces SSH a cette VM pour lancer les playbooks.
+
+ALTERNATIVES REJETEES
+---------------------
+
+Option A (WSL2 local) a ete ecartee : elle aurait fonctionne, mais aurait lie
+l'execution d'Ansible a une seule machine physique et ajoute de la complexite
+de configuration sur le poste de travail personnel de l'utilisateur, plutot
+que sur une ressource dediee a l'infrastructure.
+
+
+==================================================
+DECISION : Structure du depot et perimetre des roles
+==================================================
+
+CONTEXTE
+--------
+
+Il fallait definir une structure de depot et une liste de roles de depart,
+sans sur-dimensionner pour un usage personnel.
+
+DECISION
+--------
+
+Structure minimale :
+- `site.yml` unique a la racine comme point d'entree (`ansible-playbook
+  site.yml`), pas de sous-dossier `playbooks/` separe tant qu'un seul
+  playbook suffit.
+- `inventories/home/` avec `hosts.yml` (statique) et `group_vars/all.yml`.
+- Deux roles de depart : `common` (mises a jour, paquets de base, agent QEMU,
+  fuseau horaire, synchronisation horaire) et `ssh` (durcissement : pas de
+  root par mot de passe, pas d'authentification par mot de passe).
+
+RAISON
+------
+
+Repond aux besoins reels actuels (une seule VM geree, un socle commun a
+appliquer) sans ajouter de structure anticipant des besoins hypothetiques.
+D'autres roles seront ajoutes au fur et a mesure de besoins reels (ex: docker,
+reverse proxy) plutot que d'etre crees a l'avance.
+
+IMPACT
+------
+
+Positif : depot lisible de bout en bout en quelques minutes, aucune
+abstraction inutile.
+Negatif : si le nombre de playbooks augmente significativement, un dossier
+`playbooks/` dedie redeviendra pertinent (facile a introduire plus tard sans
+tout restructurer).
+
+ALTERNATIVES REJETEES
+---------------------
+
+La structure complete proposee initialement (avec `playbooks/` des le depart
+et une longue liste de roles anticipes) a ete simplifiee : aucun de ces
+elements n'avait d'utilite immediate.
+
+
+==================================================
+DECISION : Inventaire statique plutot que dynamique
+==================================================
+
+CONTEXTE
+--------
+
+Le nombre de VM geres est faible (une seule VM pour l'instant, le control-node
+lui-meme). Il fallait choisir entre un inventaire statique (fichier YAML) et
+un inventaire dynamique (plugin Proxmox, generation automatique depuis les
+outputs Terraform a chaque execution).
+
+DECISION
+--------
+
+Inventaire statique (`inventories/home/hosts.yml`), maintenu a la main (ou via
+le script `scripts/generate-inventory.ps1` du depot Terraform, qui peut
+regenerer ce fichier apres un `terraform apply`).
+
+RAISON
+------
+
+Pour un petit nombre de VM, un inventaire statique reste plus simple a lire,
+versionner et auditer qu'un plugin dynamique. Le lien avec Terraform est
+maintenu via un script explicite plutot qu'une dependance executee a chaque
+run Ansible.
+
+IMPACT
+------
+
+Positif : simplicite, aucune dependance a l'API Proxmox au moment de
+l'execution des playbooks.
+Negatif : necessite une etape manuelle (ou scriptee) de synchronisation apres
+chaque `terraform apply` qui ajoute ou modifie une VM. A reconsiderer (plugin
+d'inventaire dynamique `community.general.proxmox`) si le nombre de VM
+augmente significativement.
+
+ALTERNATIVES REJETEES
+---------------------
+
+Le plugin d'inventaire dynamique Proxmox a ete ecarte pour l'instant : il
+aurait ajoute une dependance reseau/API a chaque execution de playbook pour un
+gain marginal avec une seule VM geree.
+
+
+==================================================
+DECISION : Authentification SSH et cle dediee
+==================================================
+
+CONTEXTE
+--------
+
+Il fallait definir comment Ansible s'authentifie aupres des VM cibles.
+
+DECISION
+--------
+
+- Cle SSH dediee (`id_ed25519_pve_admin`), generee specifiquement pour ce
+  projet, dont la cle publique est injectee via Cloud-Init (Terraform) dans
+  le compte `ansible` de chaque VM provisionnee.
+- La cle privee correspondante est copiee une seule fois sur le control-node
+  (`LPRANSIBLE01`), qui est la seule machine censee executer Ansible au
+  quotidien.
+- `ansible.cfg` reference cette cle (`private_key_file`) et l'utilisateur
+  `ansible` (`remote_user`) par defaut.
+
+RAISON
+------
+
+Une cle dediee au projet (plutot qu'une cle personnelle existante) limite
+l'impact d'une eventuelle compromission au seul perimetre de cette
+infrastructure. Centraliser la cle privee sur le control-node evite de la
+disperser sur plusieurs machines.
+
+IMPACT
+------
+
+Positif : perimetre de la cle clairement delimite, facile a revoquer
+(regeneration + mise a jour de `ssh_public_key` cote Terraform) sans affecter
+d'autres usages.
+Negatif : si le control-node est perdu ou compromis, cette cle doit etre
+consideree comme compromise et regeneree partout.
+
+ALTERNATIVES REJETEES
+---------------------
+
+Reutiliser une cle SSH personnelle deja existante a ete ecarte : cela aurait
+melange le perimetre de cette infrastructure avec d'autres usages personnels
+de cette meme cle.
+
+
+==================================================
+DECISION : Ansible Vault non utilise pour l'instant
+==================================================
+
+CONTEXTE
+--------
+
+Aucun secret (mot de passe, token) n'est aujourd'hui necessaire dans les
+playbooks ou roles de ce depot : l'authentification se fait entierement par
+cle SSH, et les seuls secrets du projet (token API Proxmox, cles privees)
+vivent en dehors de Git (voir le depot Terraform).
+
+DECISION
+--------
+
+Ansible Vault n'est pas mis en place tant qu'aucun secret ne doit transiter
+par une variable Ansible. Le `.gitignore` anticipe neanmoins les fichiers de
+mot de passe de vault (`.vault_pass`, `vault_pass.txt`) pour eviter un oubli
+le jour ou Vault sera introduit.
+
+RAISON
+------
+
+Eviter d'ajouter un mecanisme (gestion de mot de passe de vault, chiffrement/
+dechiffrement) sans usage reel immediat.
+
+IMPACT
+------
+
+Positif : simplicite actuelle.
+Negatif : des qu'un secret devra etre gere par un role (ex: mot de passe d'un
+service applicatif), Ansible Vault devra etre introduit a ce moment-la.
+
+ALTERNATIVES REJETEES
+---------------------
+
+Aucune, ce point sera revisite des qu'un besoin reel apparaitra.

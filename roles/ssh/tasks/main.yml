@@ -1,0 +1,16 @@
+---
+- name: Interdire la connexion SSH root par mot de passe
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin {{ ssh_permit_root_login }}"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Redemarrer sshd
+
+- name: Desactiver l'authentification par mot de passe
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication {{ ssh_password_authentication }}"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Redemarrer sshd

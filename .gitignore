@@ -1,0 +1,16 @@
+# Ansible
+*.retry
+*.log
+
+# Ansible Vault (si utilise plus tard)
+.vault_pass
+vault_pass.txt
+*.vault_pass
+
+# Secrets divers
+*.pem
+*.key
+.env
+
+# Divers
+.DS_Store

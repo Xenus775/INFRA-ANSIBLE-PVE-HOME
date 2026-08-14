@@ -1,1 +1,171 @@
 # INFRA-ANSIBLE-PVE-HOME
+
+Configuration logicielle des VM provisionnees par
+[INFRA-TERRAFORM-PVE-HOME](https://github.com/Xenus775/INFRA-TERRAFORM-PVE-HOME)
+sur mon Proxmox personnel.
+
+Ce depot est responsable **uniquement** de la configuration logicielle
+(paquets, services, durcissement). La creation des VM (CPU, RAM, disque,
+reseau, Cloud-Init) est geree par le depot Terraform.
+
+## Prerequis
+
+- [Ansible](https://docs.ansible.com/) (paquet `ansible`, pas seulement
+  `ansible-core` : les roles utilisent la collection `community.general`)
+- Un acces SSH par cle au compte `ansible` sur chaque VM cible
+
+Installation sur une machine Debian/Ubuntu :
+
+```bash
+sudo apt update && sudo apt install -y git ansible
+```
+
+## Architecture
+
+Ansible s'execute depuis une VM dediee, `LPRANSIBLE01` (control-node,
+192.168.10.120, creee par le depot Terraform). Voir `DECISIONS.txt` pour le
+raisonnement complet (Ansible ne tourne pas nativement sous Windows sans
+WSL).
+
+```
+Terraform (depot separe)
+    |
+    v
+VM prete (Cloud-Init applique, SSH disponible)
+    |
+    v
+git clone INFRA-ANSIBLE-PVE-HOME (sur LPRANSIBLE01)
+    |
+    v
+ansible-playbook site.yml
+    |
+    v
+VM configuree (paquets, SSH durci, agent QEMU, fuseau horaire)
+```
+
+## Inventaire
+
+Inventaire statique dans `inventories/home/hosts.yml`. Exemple actuel :
+
+```yaml
+all:
+  vars:
+    ansible_user: ansible
+  children:
+    control_node:
+      hosts:
+        LPRANSIBLE01:
+          ansible_host: 192.168.10.120
+```
+
+Le script `scripts/generate-inventory.ps1` du depot Terraform peut regenerer
+ce fichier automatiquement a partir des outputs Terraform apres un `terraform
+apply`.
+
+## Variables
+
+Variables communes dans `inventories/home/group_vars/all.yml` (ex:
+`common_timezone`). Variables par role dans `roles/<role>/defaults/main.yml`.
+
+## Roles
+
+| Role | Contenu |
+|---|---|
+| `common` | Mises a jour de securite, paquets de base, agent QEMU actif, fuseau horaire, synchronisation horaire |
+| `ssh` | Durcissement SSH : pas de connexion root, pas d'authentification par mot de passe |
+
+## Connexion SSH
+
+`ansible.cfg` utilise par defaut :
+
+```ini
+remote_user = ansible
+private_key_file = ~/.ssh/id_ed25519_pve_admin
+```
+
+Cette cle est dediee au projet (voir `DECISIONS.txt`) : sa cle publique est
+injectee via Cloud-Init dans toutes les VM provisionnees par Terraform, et sa
+cle privee vit sur le control-node `LPRANSIBLE01` (`~/.ssh/`).
+
+`host_key_checking = False` est active dans `ansible.cfg` : reseau personnel
+de confiance, prompts d'acceptation de cle desactives par choix assume pour
+la simplicite (voir `DECISIONS.txt`).
+
+## Secrets
+
+**Aucun secret n'est commite dans ce depot.** Aucun secret n'est aujourd'hui
+necessaire (authentification uniquement par cle SSH). Si un secret devient
+necessaire (mot de passe applicatif, token), il devra passer par Ansible
+Vault — voir `DECISIONS.txt`. Le `.gitignore` anticipe deja les fichiers de
+mot de passe de vault.
+
+## Lancer les playbooks
+
+Depuis le control-node (`LPRANSIBLE01`) :
+
+```bash
+git clone git@github.com:Xenus775/INFRA-ANSIBLE-PVE-HOME.git
+cd INFRA-ANSIBLE-PVE-HOME
+ansible-galaxy collection install -r requirements.yml
+
+ansible-playbook --syntax-check site.yml
+ansible-playbook site.yml
+```
+
+Pour cibler une seule VM :
+
+```bash
+ansible-playbook site.yml --limit LPRANSIBLE01
+```
+
+Pour verifier ce qui changerait sans l'appliquer :
+
+```bash
+ansible-playbook site.yml --check --diff
+```
+
+## Ajouter une nouvelle VM
+
+1. Provisionnez-la avec Terraform (voir INFRA-TERRAFORM-PVE-HOME).
+2. Ajoutez-la dans `inventories/home/hosts.yml`, dans le groupe approprie
+   (creez un nouveau groupe si besoin, par exemple pour un futur groupe de
+   VM de service).
+3. `ansible-playbook site.yml --limit <nom-de-la-vm>` pour l'appliquer sans
+   toucher aux autres hotes.
+
+## Ajouter un role
+
+```bash
+mkdir -p roles/mon_role/{tasks,defaults,handlers}
+```
+
+Ajoutez-le a `site.yml` (globalement) ou a un nouveau playbook cible si le
+role ne concerne qu'un sous-ensemble de VM.
+
+## Tests
+
+```bash
+ansible-playbook --syntax-check site.yml
+ansible-lint            # si installe
+ansible all -m ping     # verifie la connectivite SSH sur tout l'inventaire
+```
+
+## Troubleshooting
+
+- **`UNREACHABLE` / timeout SSH** : verifiez que la VM est demarree et que
+  `ansible_host` dans l'inventaire correspond a son IP reelle (voir les
+  outputs du depot Terraform).
+- **`sudo: a password is required`** : le compte `ansible` cree par
+  Cloud-Init doit disposer d'un sudo sans mot de passe (verifie a la creation
+  de `LPRANSIBLE01`).
+- **Module `community.general.timezone` introuvable** : lancez
+  `ansible-galaxy collection install -r requirements.yml`.
+
+## Bonnes pratiques / workflow recommande
+
+1. `git pull` avant toute modification.
+2. `ansible-playbook --syntax-check site.yml` avant tout run reel.
+3. `ansible-playbook site.yml --check --diff` pour previsualiser les
+   changements avant de les appliquer pour de vrai.
+4. Ne jamais desactiver une protection SSH existante sans raison documentee
+   dans `DECISIONS.txt`.

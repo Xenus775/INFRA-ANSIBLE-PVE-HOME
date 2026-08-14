@@ -1,0 +1,34 @@
+---
+- name: Mettre a jour le cache apt
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Appliquer les mises a jour de securite disponibles
+  ansible.builtin.apt:
+    upgrade: safe
+
+- name: Installer les paquets de base
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Purger les paquets obsoletes
+  ansible.builtin.apt:
+    autoremove: true
+
+- name: Activer et demarrer qemu-guest-agent
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    enabled: true
+    state: started
+
+- name: Definir le fuseau horaire
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+
+- name: Activer la synchronisation horaire (systemd-timesyncd)
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
