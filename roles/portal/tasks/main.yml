@@ -6,6 +6,20 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Verifier si Terraform est deja installe
+  ansible.builtin.command: terraform version
+  register: portal_terraform_check
+  changed_when: false
+  failed_when: false
+
+- name: Installer Terraform (pas de paquet apt Debian, binaire officiel HashiCorp)
+  ansible.builtin.unarchive:
+    src: "https://releases.hashicorp.com/terraform/{{ terraform_version }}/terraform_{{ terraform_version }}_linux_amd64.zip"
+    dest: /usr/local/bin
+    remote_src: true
+    mode: "0755"
+  when: portal_terraform_check.rc != 0
+
 - name: Creer le groupe systeme portal
   ansible.builtin.group:
     name: "{{ portal_service_group }}"

@@ -80,7 +80,7 @@ Variables communes dans `inventories/home/group_vars/all.yml` (ex:
 | `mysql` | Installation de MariaDB, securisation de base (suppression comptes anonymes/base test), mot de passe root genere aleatoirement |
 | `wordpress` | Stack LAMP + WordPress installe et configure via WP-CLI (base + compte admin generes) |
 | `exploitation_account` | Cree un compte local `exploitation` (groupe `sudo`, mot de passe genere aleatoirement) sur une VM |
-| `portal` | Deploie le portail de provisioning on-demand (Node/Express) sur `portal01` : paquets, utilisateur systeme dedie, code, service systemd |
+| `portal` | Deploie le portail de provisioning on-demand (Node/Express) sur `portal01` : Terraform, Node.js, utilisateur systeme dedie, code, service systemd |
 
 Le role `portal` cible le groupe `portal` (`portal01`) via le playbook
 `portal.yml`, pas `site.yml`. Voir `CODE-PLATFORME-PROVISIONING-ONDEMDAND`

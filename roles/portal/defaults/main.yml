@@ -10,3 +10,6 @@ portal_node_packages:
   - npm
   - git
   - acl
+  - unzip
+
+terraform_version: "1.9.8"
