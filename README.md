@@ -74,12 +74,27 @@ Variables communes dans `inventories/home/group_vars/all.yml` (ex:
 | `common` | Mises a jour de securite, paquets de base, agent QEMU actif, fuseau horaire, synchronisation horaire |
 | `ssh` | Durcissement SSH : pas de connexion root, pas d'authentification par mot de passe |
 | `apache` | Installation et activation du serveur web Apache (`apache2`) |
+| `exploitation_account` | Cree un compte local `exploitation` (groupe `sudo`, mot de passe genere aleatoirement) sur une VM |
 
 Le role `apache` n'est pas applique par `site.yml` : il cible le groupe
 `webservers` de l'inventaire via le playbook dedie `webserver.yml`. Ce
 groupe est vide pour l'instant (aucune VM web provisionnee) ; ajoutez-y une
 VM et lancez `ansible-playbook webserver.yml` le jour ou une VM web sera
 creee via Terraform.
+
+Le role `exploitation_account` n'est pas non plus applique par `site.yml` :
+il est declenche via le playbook `exploitation-account.yml`, cible avec
+`--limit <nom-vm>` a chaque nouvelle VM cree par Terraform (voir le script
+`scripts/provision-vm.ps1` du depot Terraform, qui automatise l'ensemble :
+mise a jour de l'inventaire, push, puis execution de ce playbook depuis
+LPRANSIBLE01).
+
+Ce compte est concu comme un compte de secours (break-glass) : le mot de
+passe genere n'est utilisable que localement (console Proxmox) ou via `su`,
+jamais en SSH — le role `ssh` desactive `PasswordAuthentication`
+globalement, sans exception pour ce compte. Le mot de passe n'est genere
+qu'une seule fois : si le compte existe deja, le role ne le regenere pas
+(evite une rotation accidentelle lors d'un re-run).
 
 ## Connexion SSH
 
