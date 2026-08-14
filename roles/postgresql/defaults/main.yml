@@ -2,4 +2,5 @@
 postgresql_packages:
   - postgresql
   - python3-psycopg2
+  - acl
 postgresql_password_length: 24
