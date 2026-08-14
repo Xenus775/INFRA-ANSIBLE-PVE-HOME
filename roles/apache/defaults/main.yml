@@ -1,0 +1,6 @@
+---
+apache_packages:
+  - apache2
+
+apache_service_enabled: true
+apache_service_state: started

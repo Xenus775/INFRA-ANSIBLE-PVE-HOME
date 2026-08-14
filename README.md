@@ -73,6 +73,10 @@ Variables communes dans `inventories/home/group_vars/all.yml` (ex:
 |---|---|
 | `common` | Mises a jour de securite, paquets de base, agent QEMU actif, fuseau horaire, synchronisation horaire |
 | `ssh` | Durcissement SSH : pas de connexion root, pas d'authentification par mot de passe |
+| `apache` | Installation et activation du serveur web Apache (`apache2`) |
+
+Le role `apache` n'est pas applique par `site.yml` : il cible le groupe
+`webservers` de l'inventaire via le playbook dedie `webserver.yml`.
 
 ## Connexion SSH
 

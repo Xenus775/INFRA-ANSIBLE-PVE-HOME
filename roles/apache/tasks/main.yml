@@ -1,0 +1,13 @@
+---
+- name: Installer Apache
+  ansible.builtin.apt:
+    name: "{{ apache_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Activer et demarrer Apache
+  ansible.builtin.systemd:
+    name: apache2
+    enabled: "{{ apache_service_enabled }}"
+    state: "{{ apache_service_state }}"

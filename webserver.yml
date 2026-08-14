@@ -1,0 +1,5 @@
+---
+- name: Installer et configurer Apache sur les serveurs web
+  hosts: webservers
+  roles:
+    - apache
