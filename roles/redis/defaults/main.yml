@@ -1,0 +1,5 @@
+---
+redis_packages:
+  - redis-server
+redis_password_length: 24
+redis_conf_path: /etc/redis/redis.conf

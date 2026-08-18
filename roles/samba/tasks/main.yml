@@ -1,0 +1,76 @@
+---
+- name: Installer Samba
+  ansible.builtin.apt:
+    name: "{{ samba_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Creer l'utilisateur systeme dedie au partage
+  ansible.builtin.user:
+    name: "{{ samba_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Creer le dossier partage
+  ansible.builtin.file:
+    path: "{{ samba_share_path }}"
+    state: directory
+    owner: "{{ samba_user }}"
+    group: "{{ samba_user }}"
+    mode: "0770"
+
+- name: Declarer le partage dans smb.conf
+  ansible.builtin.blockinfile:
+    path: /etc/samba/smb.conf
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - partage {{ samba_share_name }}"
+    block: |
+      [{{ samba_share_name }}]
+          path = {{ samba_share_path }}
+          valid users = {{ samba_user }}
+          read only = no
+          browsable = yes
+  notify: Redemarrer smbd
+
+- name: Verifier si le partage Samba a deja ete provisionne
+  ansible.builtin.stat:
+    path: /root/.ansible_provisioned_samba
+  register: samba_marker
+
+- name: Generer un mot de passe aleatoire
+  ansible.builtin.set_fact:
+    samba_password: "{{ lookup('password', '/dev/null length=' ~ samba_password_length ~ ' chars=ascii_letters,digits') }}"
+  when: not samba_marker.stat.exists
+
+- name: Definir le mot de passe Samba de l'utilisateur du partage
+  ansible.builtin.command: "smbpasswd -a -s {{ samba_user }}"
+  args:
+    stdin: "{{ samba_password }}\n{{ samba_password }}\n"
+  when: not samba_marker.stat.exists
+
+- name: Marquer le partage Samba comme provisionne
+  ansible.builtin.file:
+    path: /root/.ansible_provisioned_samba
+    state: touch
+    mode: "0600"
+  when: not samba_marker.stat.exists
+
+- name: Appliquer immediatement le redemarrage (avant le reste du run)
+  ansible.builtin.meta: flush_handlers
+
+- name: Activer et demarrer smbd
+  ansible.builtin.systemd:
+    name: smbd
+    enabled: true
+    state: started
+
+- name: Afficher les identifiants du partage
+  ansible.builtin.debug:
+    msg: "SAMBA_CREDENTIALS host={{ inventory_hostname }} share={{ samba_share_name }} user={{ samba_user }} password={{ samba_password }} path={{ samba_share_path }}"
+  when: not samba_marker.stat.exists
+
+- name: Signaler que le partage Samba etait deja provisionne
+  ansible.builtin.debug:
+    msg: "Partage Samba deja provisionne sur {{ inventory_hostname }} : mot de passe non regenere."
+  when: samba_marker.stat.exists

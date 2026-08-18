@@ -1,0 +1,7 @@
+---
+samba_packages:
+  - samba
+samba_share_name: partage
+samba_share_path: /srv/samba/partage
+samba_user: smbuser
+samba_password_length: 24

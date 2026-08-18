@@ -1,0 +1,51 @@
+---
+- name: Installer Redis
+  ansible.builtin.apt:
+    name: "{{ redis_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Verifier si Redis a deja ete provisionne
+  ansible.builtin.stat:
+    path: /root/.ansible_provisioned_redis
+  register: redis_marker
+
+- name: Generer un mot de passe aleatoire
+  ansible.builtin.set_fact:
+    redis_password: "{{ lookup('password', '/dev/null length=' ~ redis_password_length ~ ' chars=ascii_letters,digits') }}"
+  when: not redis_marker.stat.exists
+
+- name: Definir le mot de passe Redis (requirepass)
+  ansible.builtin.lineinfile:
+    path: "{{ redis_conf_path }}"
+    regexp: "^#?\\s*requirepass\\s"
+    line: "requirepass {{ redis_password }}"
+  when: not redis_marker.stat.exists
+  notify: Redemarrer redis
+
+- name: Marquer Redis comme provisionne
+  ansible.builtin.file:
+    path: /root/.ansible_provisioned_redis
+    state: touch
+    mode: "0600"
+  when: not redis_marker.stat.exists
+
+- name: Appliquer immediatement le redemarrage (avant le reste du run)
+  ansible.builtin.meta: flush_handlers
+
+- name: Activer et demarrer Redis
+  ansible.builtin.systemd:
+    name: redis-server
+    enabled: true
+    state: started
+
+- name: Afficher le mot de passe genere
+  ansible.builtin.debug:
+    msg: "REDIS_PASSWORD host={{ inventory_hostname }} password={{ redis_password }}"
+  when: not redis_marker.stat.exists
+
+- name: Signaler que Redis etait deja provisionne
+  ansible.builtin.debug:
+    msg: "Redis deja provisionne sur {{ inventory_hostname }} : mot de passe non regenere."
+  when: redis_marker.stat.exists

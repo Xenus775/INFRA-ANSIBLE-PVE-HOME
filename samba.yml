@@ -1,0 +1,5 @@
+---
+- name: Installer et configurer Samba
+  hosts: samba_servers
+  roles:
+    - samba

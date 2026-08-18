@@ -79,6 +79,10 @@ Variables communes dans `inventories/home/group_vars/all.yml` (ex:
 | `postgresql` | Installation de PostgreSQL, mot de passe du role `postgres` genere aleatoirement |
 | `mysql` | Installation de MariaDB, securisation de base (suppression comptes anonymes/base test), mot de passe root genere aleatoirement |
 | `wordpress` | Stack LAMP + WordPress installe et configure via WP-CLI (base + compte admin generes) |
+| `nginx` | Installation et activation du serveur web nginx |
+| `redis` | Installation de Redis, mot de passe (`requirepass`) genere aleatoirement |
+| `docker` | Installation de Docker (`docker.io`), utilisateur `ansible` ajoute au groupe `docker` |
+| `samba` | Installation de Samba, partage de fichiers dedie avec compte et mot de passe generes |
 | `exploitation_account` | Cree un compte local `exploitation` (groupe `sudo`, mot de passe genere aleatoirement) sur une VM |
 | `portal` | Deploie le portail de provisioning on-demand (Node/Express) sur `portal01` : Terraform, Node.js, utilisateur systeme dedie, code, service systemd |
 
@@ -96,14 +100,25 @@ un playbook dedie, sur le meme modele :
 | `postgres.yml` | `postgres_servers` | `postgresql` |
 | `mysql.yml` | `mysql_servers` | `mysql` |
 | `wordpress.yml` | `wordpress_servers` | `wordpress` |
+| `nginx.yml` | `nginx_servers` | `nginx` |
+| `redis.yml` | `redis_servers` | `redis` |
+| `docker.yml` | `docker_servers` | `docker` |
+| `samba.yml` | `samba_servers` | `samba` |
 
-Les roles `postgresql`, `mysql` et `wordpress` suivent la meme logique
-d'idempotence que `exploitation_account` : un fichier sentinelle
-(`/root/.ansible_provisioned_<service>`) evite de regenerer les mots de
-passe lors d'un re-run. Les identifiants generes sont affiches une seule
-fois via des lignes marqueurs machine-lisibles (`POSTGRES_PASSWORD`,
-`MYSQL_ROOT_PASSWORD`, `WORDPRESS_DB`, `WORDPRESS_ADMIN` — meme convention
-que `EXPLOITATION_PASSWORD`), jamais stockes ailleurs.
+Une VM peut heberger plusieurs services a la fois : elle appartient alors
+a plusieurs groupes en meme temps (voir `scripts/add-host.py --group`,
+repetable), et chaque playbook concerne est lance a la suite avec
+`--limit <vm>`.
+
+Les roles `postgresql`, `mysql`, `wordpress`, `redis` et `samba` suivent
+la meme logique d'idempotence que `exploitation_account` : un fichier
+sentinelle (`/root/.ansible_provisioned_<service>`) evite de regenerer
+les mots de passe lors d'un re-run. Les identifiants generes sont
+affiches une seule fois via des lignes marqueurs machine-lisibles
+(`POSTGRES_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `WORDPRESS_DB`,
+`WORDPRESS_ADMIN`, `REDIS_PASSWORD`, `SAMBA_CREDENTIALS` — meme
+convention que `EXPLOITATION_PASSWORD`), jamais stockes ailleurs.
+`nginx` et `docker` n'ont pas d'identifiant a generer.
 
 Le role `exploitation_account` n'est pas non plus applique par `site.yml` :
 il est declenche via le playbook `exploitation-account.yml`, cible avec
@@ -184,9 +199,10 @@ ansible-playbook site.yml --check --diff
 1. Provisionnez-la avec Terraform (voir INFRA-TERRAFORM-PVE-HOME).
 2. Ajoutez-la dans `inventories/home/hosts.yml`, dans le groupe approprie
    (creez un nouveau groupe si besoin) — soit a la main, soit avec
-   `scripts/add-host.py --group <groupe> --name <vm> --ip <ip>` (cree le
-   groupe si besoin, refuse si le nom existe deja ailleurs, preserve les
-   commentaires existants du fichier).
+   `scripts/add-host.py --group <groupe> --name <vm> --ip <ip>` (`--group`
+   repetable pour une VM multi-services, cree les groupes si besoin,
+   refuse si le nom existe deja ailleurs, preserve les commentaires
+   existants du fichier).
 3. `ansible-playbook site.yml --limit <nom-de-la-vm>` pour l'appliquer sans
    toucher aux autres hotes, puis le(s) playbook(s) de service concerne(s).
 
